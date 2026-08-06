@@ -39,6 +39,7 @@ uniform float iJump;      // FTL jump envelope [0,1], beat-triggered
 uniform float iSpeed;
 uniform float iHue;
 uniform float iDensity;   // per-instance star-field density variant
+uniform float iWarp;      // CPU-integrated warp distance (audio-speed safe)
 
 in  vec2 v_uv;
 out vec4 fragColor;
@@ -69,7 +70,9 @@ void main() {
         float rad = length(p) + 1e-4;
         float cell = floor(ang / TAU * cellCount);
         float starSeed = hash21(vec2(cell, fl * 7.0));
-        float depth = fract(starSeed * 9.7 - t * (speed * (0.5 + fl * 0.4)));
+        // iWarp is CPU-integrated (see update()): the old t * speed form
+        // re-randomized every star's depth each frame under music.
+        float depth = fract(starSeed * 9.7 - iWarp * (0.5 + fl * 0.4));
         float r0 = 0.02 + depth * 1.4;
         vec2 starDir = vec2(cos((cell + 0.5) / cellCount * TAU),
                             sin((cell + 0.5) / cellCount * TAU));
@@ -132,6 +135,8 @@ class WarpDrive(BaseEffect):
         self._bass = self._mid = self._treble = 0.0
         self._beat = 0.0
         self._jump = 0.0
+        # CPU-integrated warp phase (nebula_drift pattern).
+        self._warp = float(self.rng.uniform(0.0, 100.0))
 
     def update(self, dt: float, audio: AudioData) -> None:
         super().update(dt, audio)
@@ -145,6 +150,10 @@ class WarpDrive(BaseEffect):
             self._hue = float((self._hue + self.rng.uniform(0.05, 0.18)) % 1.0)
         self._beat = max(0.0, self._beat - dt * 2.5)
         self._jump = max(0.0, self._jump - dt * 1.3)
+        rate = 0.5 + max(0.05, float(self.parameters['speed'])) * 0.8
+        self._warp = (self._warp
+                      + dt * rate * (0.35 + self._bass * 1.4 + self._jump * 3.5)
+                      ) % 1000.0
 
     def render(self) -> None:
         p = self._prog
@@ -155,6 +164,7 @@ class WarpDrive(BaseEffect):
         p['iTreble'].value = self._treble
         p['iBeat'].value = self._beat
         p['iJump'].value = self._jump
+        p['iWarp'].value = self._warp
         p['iSpeed'].value = max(0.05, float(self.parameters['speed']))
         p['iHue'].value = self._hue
         p['iDensity'].value = self._density

@@ -38,6 +38,7 @@ uniform float iBeat;
 uniform float iSpeed;
 uniform float iHue;
 uniform float iTurn;      // per-instance turn-phase offset
+uniform float iFlight;    // CPU-integrated bass-speed flight phase
 
 in  vec2 v_uv;
 out vec4 fragColor;
@@ -54,6 +55,9 @@ vec3 palette(float t) { return 0.5 + 0.5 * cos(TAU * (t + vec3(0.0, 0.33, 0.67))
 void main() {
     float A = iResolution.x / max(iResolution.y, 1.0);
     float t = iTime * (0.6 + iSpeed * 0.7);
+    // iFlight is the CPU-integrated audio share of forward motion (see
+    // update()): the old t * (k + iBass...) form multiplied unbounded time
+    // by a per-frame audio delta, strobing walls/floor under music.
     float speed = 0.5 + iBass * 1.2;
 
     // Bank hard into turns, snap sharply on beat.
@@ -80,8 +84,8 @@ void main() {
         // receding into a soft haze, not a flat wall of noise.
         float zaRaw = 1.0 / max(0.06, (0.5 - p.y));
         float za = min(zaRaw, 9.0);
-        float band = floor((za * 2.2 - t * (1.5 + speed)) * 3.0);
-        float bandF = fract((za * 2.2 - t * (1.5 + speed)) * 3.0);
+        float band = floor((za * 2.2 - (t * 2.0 + iFlight)) * 3.0);
+        float bandF = fract((za * 2.2 - (t * 2.0 + iFlight)) * 3.0);
         float glowLine = smoothstep(0.08, 0.0, min(bandF, 1.0 - bandF)) * smoothstep(9.0, 5.5, zaRaw);
         float hue = iHue + band * 0.06 + side * 0.08;
         vec3 wallCol = mix(vec3(0.05, 0.08, 0.16), palette(hue), 0.55);
@@ -96,7 +100,7 @@ void main() {
     float floorDepth = -p.y - 0.04;
     if (floorDepth > 0.0 && distToWall > -0.2) {
         float fz = min(1.0 / max(0.03, floorDepth), 24.0);
-        vec2 fp = vec2(p.x * fz, fz * 1.4 - t * (2.0 + speed * 1.5));
+        vec2 fp = vec2(p.x * fz, fz * 1.4 - (t * 2.75 + iFlight * 1.5));
         float gx = abs(fract(fp.x * 2.0) - 0.5);
         float gy = abs(fract(fp.y) - 0.5);
         float lineW = clamp(0.05 / max(fz * 0.15, 1.0), 0.01, 0.05);
@@ -150,6 +154,8 @@ class CanyonRun(BaseEffect):
         self._turn = float(self.rng.uniform(0.0, 6.28))
         self._bass = self._mid = self._treble = 0.0
         self._beat = 0.0
+        # CPU-integrated audio flight phase (nebula_drift pattern).
+        self._flight = float(self.rng.uniform(0.0, 1000.0))
 
     def update(self, dt: float, audio: AudioData) -> None:
         super().update(dt, audio)
@@ -161,6 +167,8 @@ class CanyonRun(BaseEffect):
             self._beat = 1.0
             self._hue = float((self._hue + self.rng.uniform(0.03, 0.12)) % 1.0)
         self._beat = max(0.0, self._beat - dt * 3.0)
+        rate = 0.6 + max(0.05, float(self.parameters['speed'])) * 0.7
+        self._flight = (self._flight + dt * rate * self._bass * 1.2) % 1000.0
 
     def render(self) -> None:
         p = self._prog
@@ -173,6 +181,7 @@ class CanyonRun(BaseEffect):
         p['iSpeed'].value = max(0.05, float(self.parameters['speed']))
         p['iHue'].value = self._hue
         p['iTurn'].value = self._turn
+        p['iFlight'].value = self._flight
         self._vao.render(moderngl.TRIANGLE_STRIP)
 
     def destroy(self) -> None:

@@ -13,7 +13,7 @@ Audio reactivity:
 """
 from __future__ import annotations
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 import moderngl
 
@@ -40,6 +40,8 @@ uniform float iBeat;
 uniform float iSpeed;
 uniform float iHue;
 uniform float iShake;    // beat-driven camera-kick envelope
+uniform float iFlight;   // CPU-integrated flight distance (audio-speed safe)
+uniform float iSpin;     // CPU-integrated mid-band tumble phase
 
 in  vec2 v_uv;
 out vec4 fragColor;
@@ -67,7 +69,6 @@ float rockSdf(vec2 p, float seed, float rot) {
 void main() {
     float A = iResolution.x / max(iResolution.y, 1.0);
     float t = iTime * (0.5 + iSpeed * 0.9);
-    float speed = 0.6 + iBass * 1.3;
 
     // mod() bounds every time-derived value below before it reaches
     // floor()/hash() — an unbounded iTime (starts anywhere up to 10000 by
@@ -96,7 +97,10 @@ void main() {
     for (int layer = 0; layer < 5; layer++) {
         float fl = float(layer);
         float cellSize = 1.1;
-        float tWrap = mod(t * speed * 0.5, cellSize * 600.0);
+        // iFlight/iSpin are CPU-integrated phases (see update()): the old
+        // t * (k + audio) form multiplied unbounded time by a per-frame
+        // audio delta, teleporting the whole field every frame under music.
+        float tWrap = mod(iFlight, cellSize * 600.0);
         float rawZ = fl * (cellSize / 5.0) - mod(tWrap, cellSize);
         float z = mod(rawZ, cellSize) + 0.04;
         float scale = 1.0 / z;
@@ -117,7 +121,7 @@ void main() {
                                hash21(vec2(seedBase, fs + 2.0))) - 0.5) * 1.6;
             float R = 0.35;
             vec2 rp = (p * z - offset) / R;
-            float rot = t * (0.3 + rockSeed * 0.8 + iMid * 0.5) + rockSeed * 20.0;
+            float rot = t * (0.3 + rockSeed * 0.8) + iSpin + rockSeed * 20.0;
             float d = rockSdf(rp, rockSeed, rot);
             float body = smoothstep(0.02, -0.02, d);
             float rim = smoothstep(0.10, 0.0, abs(d)) * (1.0 - body * 0.5);
@@ -182,6 +186,10 @@ class AsteroidRun(BaseEffect):
         self._hue = float(self.rng.uniform(0.0, 1.0))
         self._bass = self._mid = self._treble = 0.0
         self._beat = 0.0
+        # CPU-integrated phases (nebula_drift pattern): audio modulates the
+        # *rate* here, never multiplies unbounded time in the shader.
+        self._flight = float(self.rng.uniform(0.0, 660.0))
+        self._spin = 0.0
         self._shake = 0.0
 
     def update(self, dt: float, audio: AudioData) -> None:
@@ -196,6 +204,9 @@ class AsteroidRun(BaseEffect):
             self._hue = float((self._hue + self.rng.uniform(0.03, 0.1)) % 1.0)
         self._beat = max(0.0, self._beat - dt * 3.2)
         self._shake = max(0.0, self._shake - dt * 4.5)
+        rate = 0.5 + max(0.05, float(self.parameters['speed'])) * 0.9
+        self._flight = (self._flight + dt * rate * (0.6 + self._bass * 1.3) * 0.5) % 660.0
+        self._spin = (self._spin + dt * rate * self._mid * 0.5) % 1000.0
 
     def render(self) -> None:
         p = self._prog
@@ -208,6 +219,8 @@ class AsteroidRun(BaseEffect):
         p['iSpeed'].value = max(0.05, float(self.parameters['speed']))
         p['iHue'].value = self._hue
         p['iShake'].value = self._shake
+        p['iFlight'].value = self._flight
+        p['iSpin'].value = self._spin
         self._vao.render(moderngl.TRIANGLE_STRIP)
 
     def destroy(self) -> None:

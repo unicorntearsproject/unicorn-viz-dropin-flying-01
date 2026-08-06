@@ -39,6 +39,7 @@ uniform float iBeat;
 uniform float iSpeed;
 uniform float iHue;
 uniform float iSurge;    // beat-driven speed-surge envelope
+uniform float iFlight;   // CPU-integrated flight distance (audio-speed safe)
 
 in  vec2 v_uv;
 out vec4 fragColor;
@@ -56,7 +57,6 @@ void main() {
     float A = iResolution.x / max(iResolution.y, 1.0);
     vec2 p = (v_uv - 0.5) * vec2(A, 1.0);
     float t = iTime * (0.6 + iSpeed * 0.9);
-    float speed = 0.7 + iBass * 1.0 + iSurge * 2.2;
 
     vec3 col = vec3(0.01, 0.008, 0.02);
 
@@ -77,7 +77,10 @@ void main() {
     // evenly in a bounded, wrapped depth so gate index/hue never depends on
     // an ever-growing raw time value.
     float spacing = 0.62;
-    float wrapped = mod(t * speed * 0.5, spacing * 400.0);
+    // iFlight is CPU-integrated (see update()): the old t * (k + iBass +
+    // iSurge) form re-scrubbed the whole gate sequence on every audio/surge
+    // delta, so gates teleported instead of accelerating.
+    float wrapped = mod(iFlight, spacing * 400.0);
     for (int i = 0; i < 9; i++) {
         float fi = float(i);
         float z = mod(fi * spacing - wrapped, spacing * 9.0) + 0.03;
@@ -145,6 +148,8 @@ class PortalFlight(BaseEffect):
         self._bass = self._mid = self._treble = 0.0
         self._beat = 0.0
         self._surge = 0.0
+        # CPU-integrated flight phase (nebula_drift pattern).
+        self._flight = float(self.rng.uniform(0.0, 248.0))
 
     def update(self, dt: float, audio: AudioData) -> None:
         super().update(dt, audio)
@@ -158,6 +163,10 @@ class PortalFlight(BaseEffect):
             self._hue = float((self._hue + self.rng.uniform(0.04, 0.14)) % 1.0)
         self._beat = max(0.0, self._beat - dt * 3.0)
         self._surge = max(0.0, self._surge - dt * 1.4)
+        rate = 0.6 + max(0.05, float(self.parameters['speed'])) * 0.9
+        self._flight = (self._flight
+                        + dt * rate * (0.7 + self._bass * 1.0 + self._surge * 2.2) * 0.5
+                        ) % 1000.0
 
     def render(self) -> None:
         p = self._prog
@@ -170,6 +179,7 @@ class PortalFlight(BaseEffect):
         p['iSpeed'].value = max(0.05, float(self.parameters['speed']))
         p['iHue'].value = self._hue
         p['iSurge'].value = self._surge
+        p['iFlight'].value = self._flight
         self._vao.render(moderngl.TRIANGLE_STRIP)
 
     def destroy(self) -> None:

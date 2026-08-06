@@ -1,6 +1,6 @@
 # flying-01 — Unicorn Viz effect pack
 
-**Version 0.1.0**
+**Version 0.2.0**
 
 
 First-person flight sensations: Warp Drive, Cloud Surfer, Canyon Run,
@@ -32,4 +32,5 @@ randomisation requirements.
 
 ## Changelog
 
+- **0.2.0** — float32 time/audio pass (2026-08-03 audit §8): audio-modulated speeds are now CPU-integrated phases (nebula_drift pattern) in Asteroid Run, Canyon Run, Portal Flight, Warp Drive, and Wingsuit Dive — motion accelerates with the music instead of teleporting/strobing every frame at large time phases; Cloud Surfer wraps its fbm time input before the hash (cloud detail no longer collapses into flat bands).
 - **0.1.0** — initial release: seven flying effects.

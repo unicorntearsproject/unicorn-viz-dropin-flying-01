@@ -99,7 +99,13 @@ void main() {
     for (int layer = 0; layer < 3; layer++) {
         float fl = float(layer);
         float parallax = 1.0 - fl * 0.28;
-        vec2 cp = p * (0.75 + fl * 0.45) + vec2(t * (0.55 + fl * 0.4) * parallax, fl * 3.7);
+        // mod() before fbm: unbounded t (start phase up to 10k) pushes the
+        // finest fbm octave past float32's 2^23 hash precision, collapsing
+        // cloud detail into flat bands. 512 keeps the deepest octave inside
+        // precision; the field re-seeds at the wrap (~10 min), which reads
+        // as ordinary cloud drift.
+        vec2 cp = p * (0.75 + fl * 0.45)
+                + vec2(mod(t * (0.55 + fl * 0.4) * parallax, 512.0), fl * 3.7);
         cp.y += iBass * 0.22 * (fl + 1.0);
         float n = fbm(cp * 1.5);
         float thresh = 0.58 + fl * 0.05;
