@@ -13,7 +13,7 @@ Audio reactivity:
 """
 from __future__ import annotations
 
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 
 import moderngl
 
@@ -77,7 +77,7 @@ void main() {
     float tShake = mod(t * 30.0, 2000.0);
     vec2 shakeOff = vec2(hash21(vec2(floor(tShake), 1.0)),
                          hash21(vec2(floor(tShake), 2.0))) - 0.5;
-    vec2 p = (v_uv - 0.5) * vec2(A, 1.0) + shakeOff * iShake * 0.06;
+    vec2 p = (v_uv - 0.5) * vec2(A, 1.0) + shakeOff * iShake * (0.06 + iBass * 0.05);
 
     vec3 col = vec3(0.008, 0.006, 0.014);
 
@@ -94,6 +94,10 @@ void main() {
     // Layered tumbling asteroids: each layer scrolls forward (scaling up)
     // with a bounded, wrapped depth so rocks recur endlessly without ever
     // comparing against an unbounded raw time accumulator.
+    // Rock density flicker: how far into the depth layers rocks stay visible,
+    // pulsing wider on mid-band energy so the field feels denser on a swell.
+    float farCut = 3.6 + iMid * 2.0;
+
     for (int layer = 0; layer < 5; layer++) {
         float fl = float(layer);
         float cellSize = 1.1;
@@ -128,8 +132,8 @@ void main() {
 
             vec3 rockCol = mix(vec3(0.16, 0.13, 0.15), vec3(0.38, 0.28, 0.24), rockSeed);
             vec3 hotRim = mix(vec3(1.0, 0.5, 0.2), palette(iHue + rockSeed * 0.3), 0.5);
-            col = mix(col, rockCol * (0.5 + 0.1 / z), body * smoothstep(4.0, 0.3, scale));
-            col += hotRim * rim * (0.5 + iTreble * 0.9) * smoothstep(4.0, 0.3, scale);
+            col = mix(col, rockCol * (0.5 + 0.1 / z), body * smoothstep(farCut, 0.3, scale));
+            col += hotRim * rim * (0.5 + iTreble * 0.9) * smoothstep(farCut, 0.3, scale);
         }
     }
 

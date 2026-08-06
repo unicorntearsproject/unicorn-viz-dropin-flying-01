@@ -71,6 +71,9 @@ void main() {
     vec3 groundGlow = mix(vec3(0.15, 0.08, 0.20), palette(iHue), 0.4);
     float alt = clamp(iDive, 0.0, 1.0);
     vec3 col = mix(skyHigh, groundGlow, pow(alt, 1.6));
+    // Ground-glow swell: strongest on bass hits, and only once the ground is
+    // actually close (pow(alt, high exponent) keeps it near-silent at altitude).
+    col += groundGlow * iBass * pow(alt, 2.2) * 0.6;
 
     // Mountain ridgelines: each layer is a horizon-height function of screen
     // x, and motion comes from phase-shifting the noise input over time —

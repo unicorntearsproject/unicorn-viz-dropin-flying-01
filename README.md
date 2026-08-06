@@ -1,6 +1,6 @@
 # flying-01 — Unicorn Viz effect pack
 
-**Version 0.2.0**
+**Version 0.2.1**
 
 
 First-person flight sensations: Warp Drive, Cloud Surfer, Canyon Run,
@@ -32,5 +32,17 @@ randomisation requirements.
 
 ## Changelog
 
+- **0.2.1** — fixed a crash-on-load bug: Wingsuit Dive (`iBass`) and Asteroid
+  Run (`iBass`, `iMid`) declared and set audio uniforms from Python that were
+  never referenced in the compiled fragment shader. GLSL compilers strip
+  truly-unused uniforms, so moderngl's uniform map didn't contain them and
+  the very first `render()` call raised `KeyError`. Rather than just
+  deleting the dead uniforms, wired them into the GPU-side effects their own
+  docstrings already promised but never implemented: Wingsuit Dive's bass now
+  drives the "ground-glow swell as it nears" the docstring describes; Asteroid
+  Run's bass now amplifies near-miss camera shake and its mid now widens the
+  visible depth range (rock density flicker). Verified with a real moderngl
+  render across quiet/moderate/loud-beat audio and a high-iTime stress test
+  for both effects.
 - **0.2.0** — float32 time/audio pass (2026-08-03 audit §8): audio-modulated speeds are now CPU-integrated phases (nebula_drift pattern) in Asteroid Run, Canyon Run, Portal Flight, Warp Drive, and Wingsuit Dive — motion accelerates with the music instead of teleporting/strobing every frame at large time phases; Cloud Surfer wraps its fbm time input before the hash (cloud detail no longer collapses into flat bands).
 - **0.1.0** — initial release: seven flying effects.
